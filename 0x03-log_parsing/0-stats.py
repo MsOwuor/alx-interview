@@ -1,45 +1,56 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
+"""
+Log parsing script
+"""
 
 import sys
 import re
 
-# Regular expression pattern to match the input format
-pattern = re.compile(r'^(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}) - \[.*\] "GET \/projects\/260 HTTP\/1\.1" (\d{3}) (\d+)$')
 
-# Initialize variables to store metrics
-total_size = 0
-status_counts = {200: 0, 301: 0, 400: 0, 401: 0, 403: 0, 404: 0, 405: 0, 500: 0}
-lines_processed = 0
+def output(log: dict) -> None:
+    """
+    Helper function to display stats
+    :param log: Dictionary containing the log statistics
+    """
+    print("File size: {}".format(log["file_size"]))
+    for code in sorted(log["code_frequency"]):
+        if log["code_frequency"][code]:
+            print("{}: {}".format(code, log["code_frequency"][code]))
 
-try:
-    for line in sys.stdin:
-        # Check if the line matches the expected format
-        match = pattern.match(line)
-        if match:
-            # Extract relevant information from the line
-            ip_address = match.group(1)
-            status_code = int(match.group(2))
-            file_size = int(match.group(3))
 
-            # Update metrics
-            total_size += file_size
-            status_counts[status_code] += 1
-            lines_processed += 1
+if __name__ == "__main__":
+    # Regular expression to match the log line format
+    regex = re.compile(
+        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3} - '
+        r'\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.\d+\] '
+        r'"GET /projects/260 HTTP/1.1" (.{3}) (\d+)')
 
-            # Print statistics after every 10 lines
-            if lines_processed % 10 == 0:
-                print(f"File size: {total_size}")
-                for code in sorted(status_counts.keys()):
-                    if status_counts[code] > 0:
-                        print(f"{code}: {status_counts[code]}")
-                print()
+    line_count = 0
+    log = {}
+    log["file_size"] = 0
+    log["code_frequency"] = {
+        str(code): 0 for code in [200, 301, 400, 401, 403, 404, 405, 500]}
 
-except KeyboardInterrupt:
-    pass  # Handle keyboard interrupt gracefully
+    try:
+        for line in sys.stdin:
+            line = line.strip()
+            match = regex.fullmatch(line)
+            if match:
+                line_count += 1
+                code = match.group(1)
+                file_size = int(match.group(2))
 
-# Print final statistics
-print(f"File size: {total_size}")
-for code in sorted(status_counts.keys()):
-    if status_counts[code] > 0:
-        print(f"{code}: {status_counts[code]}")
+                # Update file size
+                log["file_size"] += file_size
+
+                # Update status code frequency
+                if code.isdecimal():
+                    log["code_frequency"][code] += 1
+
+                # Print stats every 10 lines
+                if line_count % 10 == 0:
+                    output(log)
+    finally:
+        # Print final stats
+        output(log)
 
